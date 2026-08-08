@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/vercel-labs/skills.git",
+  "commit": "941a7bcfeca4bf07913b9fb6f8ed81f20ff5297c",
+  "files": {
+    "src/agents.ts": "81a1ebeeb152ca185c2000a507c993a0698f504afa86f20e2b73a5f50c45a470",
+    "src/types.ts": "f4d2b6cb9488eeaafff99f8ea9cae2328c67b3b4e7256197139d5f0e2e9c465f"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "skillspore-workspace",
+  "private": true,
+  "version": "0.1.0-beta.1",
+  "description": "Secure peer-to-peer sharing and installation of Agent Skills",
+  "type": "module",
+  "license": "MIT",
+  "packageManager": "pnpm@10.17.1",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "scripts": {
+    "build": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm --filter @skillspore/rendezvous build && pnpm --filter skillspore build",
+    "typecheck": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pack:cli": "node -e \"require('node:fs').mkdirSync('artifacts',{recursive:true})\" && pnpm build && pnpm --filter skillspore pack --pack-destination artifacts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "upstream:check": "tsx scripts/sync-upstream-agents.ts --check",
+    "upstream:sync": "tsx scripts/sync-upstream-agents.ts",
+    "dev:cli": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm --filter skillspore dev",
+    "dev:server": "pnpm --filter @skillspore/rendezvous dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "prettier": "^3.8.1",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zhenghangxu/skill-secret-share.git"
+  },
+  "keywords": [],
+  "author": "",
+  "bugs": {
+    "url": "https://github.com/Zhenghangxu/skill-secret-share/issues"
+  },
+  "homepage": "https://github.com/Zhenghangxu/skill-secret-share#readme"
+}
