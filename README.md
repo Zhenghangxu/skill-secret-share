@@ -67,6 +67,9 @@ pnpm dev:cli share /path/to/example-skill
 pnpm dev:cli fetch
 ```
 
+For a fully local test between two computers, follow the
+[LAN end-to-end testing guide](docs/lan-e2e-testing.md).
+
 The local service uses STUN only by default. Configure Twilio credentials to exercise TURN:
 
 ```shell
