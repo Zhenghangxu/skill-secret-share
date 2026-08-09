@@ -68,8 +68,10 @@ export class RendezvousClient {
     return message;
   }
 
-  async waitUntilPaired(): Promise<void> {
-    await this.waitFor('paired');
+  async waitUntilPaired(expiresAt: string): Promise<void> {
+    const expiresAtMs = Date.parse(expiresAt);
+    const timeoutMs = Number.isFinite(expiresAtMs) ? Math.max(1, expiresAtMs - Date.now()) : 30_000;
+    await this.waitFor('paired', timeoutMs);
   }
 
   sendRelay(payload: SignalingPayload): void {
@@ -93,10 +95,12 @@ export class RendezvousClient {
   }
 
   private async waitFor<K extends ServerRendezvousMessage['type']>(
-    type: K
+    type: K,
+    timeoutMs = 30_000
   ): Promise<Extract<ServerRendezvousMessage, { type: K }>> {
+    const deadline = Date.now() + timeoutMs;
     while (true) {
-      const message = await this.messages.next();
+      const message = await this.messages.next(Math.max(1, deadline - Date.now()));
       if (message.type === type) return message as Extract<ServerRendezvousMessage, { type: K }>;
       if (message.type === 'peer-left') throw new Error('Peer left the session');
     }
