@@ -154,7 +154,7 @@ describe('diff and transactional installation', () => {
     const parent = await temporaryDirectory();
     const cwd = join(parent, 'project');
     const previous = await createSkill(join(cwd, '.agents/skills'), 'example-skill', 'previous\n');
-    expect(previous).toContain('.agents/skills');
+    expect(previous).toBe(join(cwd, '.agents/skills', 'example-skill'));
     const incoming = await createSkill(join(parent, 'incoming'), 'example-skill', 'incoming\n');
     await expect(
       installSkillTransaction({
