@@ -26,7 +26,7 @@ export async function connectSecurePeer(input: {
   role: 'sender' | 'receiver';
 }): Promise<{ session: PeerSession; keys: SessionKeys }> {
   const { rendezvous, info } = input.openSession;
-  await rendezvous.waitUntilPaired();
+  await rendezvous.waitUntilPaired(info.expiresAt);
   const sid = Buffer.from(info.sid, 'base64url');
   const state = await beginPake({ secret: input.secret, sid, role: input.role });
   rendezvous.sendRelay({
