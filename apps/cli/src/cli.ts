@@ -11,14 +11,15 @@ const HELP = `
 ${pc.bold('SkillSpore')} — secure peer-to-peer Agent Skill sharing
 
 Usage:
-  skillspore share <skill-directory> [--custom-passcode] [--server <wss-url>]
-  skillspore fetch [--download-only] [--output <directory>] [--server <wss-url>]
+  skillspore share <skill-directory> [--custom-passcode] [--server <wss-url>] [--force-relay]
+  skillspore fetch [--download-only] [--output <directory>] [--server <wss-url>] [--force-relay]
   skillspore list [--global] [--agent <agent>] [--json]
   skillspore remove <skills...> [--global] [--agent <agent>]
   skillspore init <name>
 
 Supported agents: codex, claude-code, cursor
 Passcodes are always entered through hidden interactive prompts.
+--force-relay is for TURN deployment testing only; normal transfers prefer direct WebRTC.
 `;
 
 async function main(): Promise<void> {

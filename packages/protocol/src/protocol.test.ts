@@ -12,6 +12,9 @@ import {
   formatPasscode,
   generateSecretPhrase,
   parsePasscode,
+  parseClientRendezvousJson,
+  parseRendezvousSubprotocol,
+  parseServerRendezvousJson,
   validateCustomSecret,
   verifyBindingMac,
   verifyManifest,
@@ -30,6 +33,68 @@ describe('passcodes', () => {
   it('enforces custom passcode strength', () => {
     expect(() => validateCustomSecret('short')).toThrow();
     expect(validateCustomSecret('three distinct words')).toBe('three-distinct-words');
+  });
+});
+
+describe('rendezvous v1 schemas', () => {
+  it('parses sender and receiver upgrade subprotocols', () => {
+    expect(parseRendezvousSubprotocol('skillspore.v1.sender')).toEqual({
+      protocol: 'skillspore.v1.sender',
+      role: 'sender',
+    });
+    expect(parseRendezvousSubprotocol('skillspore.v1.receiver.0042')).toEqual({
+      protocol: 'skillspore.v1.receiver.0042',
+      role: 'receiver',
+      nameplate: '0042',
+    });
+    expect(() => parseRendezvousSubprotocol('skillspore.v1.sender, other')).toThrow();
+    expect(() => parseRendezvousSubprotocol('skillspore.v1.receiver.42')).toThrow();
+  });
+
+  it('accepts only the final rendezvous v1 messages', () => {
+    expect(parseClientRendezvousJson('{"type":"complete"}')).toEqual({ type: 'complete' });
+    expect(
+      parseClientRendezvousJson(
+        '{"type":"relay","payload":{"type":"candidate","candidate":"candidate","mid":"0"}}'
+      )
+    ).toEqual({
+      type: 'relay',
+      payload: { type: 'candidate', candidate: 'candidate', mid: '0' },
+    });
+    expect(() => parseClientRendezvousJson('{"type":"create"}')).toThrow();
+    expect(() => parseClientRendezvousJson('{"type":"join","nameplate":"0042"}')).toThrow();
+  });
+
+  it('validates paired ICE configuration and retry metadata', () => {
+    expect(
+      parseServerRendezvousJson(
+        '{"type":"paired","iceServers":[{"urls":"stun:stun.cloudflare.com:3478"}]}'
+      )
+    ).toEqual({
+      type: 'paired',
+      iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }],
+    });
+    expect(
+      parseServerRendezvousJson(
+        '{"type":"error","code":"rate-limited","message":"Slow down","retryAfterMs":500}'
+      )
+    ).toEqual({
+      type: 'error',
+      code: 'rate-limited',
+      message: 'Slow down',
+      retryAfterMs: 500,
+    });
+  });
+
+  it('rejects signaling messages larger than 64 KiB', () => {
+    expect(() =>
+      parseClientRendezvousJson(
+        JSON.stringify({
+          type: 'relay',
+          payload: { type: 'pake-share', share: 'x'.repeat(70_000) },
+        })
+      )
+    ).toThrow(/64 KiB/);
   });
 });
 

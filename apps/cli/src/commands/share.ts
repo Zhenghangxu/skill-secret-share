@@ -14,7 +14,7 @@ import {
   connectSecurePeer,
   createRendezvousSession,
 } from '../../../../packages/transport/src/index.js';
-import { hasOption, positionalArgs, serverUrl } from '../options.js';
+import { hasOption, iceTransportPolicy, positionalArgs, serverUrl } from '../options.js';
 import { assertNotCancelled, printManifest, printSecretFindings } from '../ui.js';
 
 async function promptCustomSecret(): Promise<string> {
@@ -66,7 +66,12 @@ export async function runShare(args: string[]): Promise<void> {
   let peer: Awaited<ReturnType<typeof connectSecurePeer>> | undefined;
   try {
     spinner.start('Authenticating receiver');
-    peer = await connectSecurePeer({ openSession, secret, role: 'sender' });
+    peer = await connectSecurePeer({
+      openSession,
+      secret,
+      role: 'sender',
+      iceTransportPolicy: iceTransportPolicy(args),
+    });
     spinner.stop(`Receiver authenticated (${peer.session.connectionType})`);
     peer.session.sendControl({ type: 'manifest', manifest: prepared.manifest });
     const decision = await peer.session.receiveControl(5 * 60 * 1000);

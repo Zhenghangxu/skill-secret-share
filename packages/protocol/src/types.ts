@@ -32,11 +32,7 @@ export interface IceServerConfig {
 }
 
 export type ClientRendezvousMessage =
-  | { type: 'create' }
-  | { type: 'join'; nameplate: string }
-  | { type: 'relay'; payload: unknown }
-  | { type: 'attempt-failed' }
-  | { type: 'complete' };
+  { type: 'relay'; payload: SignalingPayload } | { type: 'attempt-failed' } | { type: 'complete' };
 
 export type ServerRendezvousMessage =
   | {
@@ -44,19 +40,17 @@ export type ServerRendezvousMessage =
       nameplate: string;
       sid: string;
       expiresAt: string;
-      iceServers: IceServerConfig[];
     }
   | {
       type: 'joined';
       nameplate: string;
       sid: string;
       expiresAt: string;
-      iceServers: IceServerConfig[];
     }
-  | { type: 'paired' }
-  | { type: 'relay'; payload: unknown }
+  | { type: 'paired'; iceServers: IceServerConfig[] }
+  | { type: 'relay'; payload: SignalingPayload }
   | { type: 'peer-left' }
-  | { type: 'error'; code: string; message: string };
+  | { type: 'error'; code: string; message: string; retryAfterMs?: number };
 
 export type SignalingPayload =
   | { type: 'pake-share'; share: string }

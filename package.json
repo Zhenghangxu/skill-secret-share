@@ -10,9 +10,9 @@
     "node": ">=22.20.0"
   },
   "scripts": {
-    "build": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm --filter @skillspore/rendezvous build && pnpm --filter skillspore build",
+    "build": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm --filter @skillspore/rendezvous build && pnpm --filter skillspore build && pnpm --filter @skillspore/rendezvous-worker build",
     "typecheck": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm -r typecheck",
-    "test": "vitest run",
+    "test": "vitest run && pnpm --filter @skillspore/rendezvous-worker test",
     "test:watch": "vitest",
     "pack:cli": "node -e \"require('node:fs').mkdirSync('artifacts',{recursive:true})\" && pnpm build && pnpm --filter skillspore pack --pack-destination artifacts",
     "format": "prettier --write .",
@@ -20,14 +20,17 @@
     "upstream:check": "tsx scripts/sync-upstream-agents.ts --check",
     "upstream:sync": "tsx scripts/sync-upstream-agents.ts",
     "dev:cli": "pnpm --filter @skillspore/protocol build && pnpm --filter @skillspore/installer build && pnpm --filter @skillspore/transport build && pnpm --filter skillspore dev",
-    "dev:server": "pnpm --filter @skillspore/rendezvous dev"
+    "dev:server": "pnpm --filter @skillspore/rendezvous dev",
+    "load:rendezvous": "tsx scripts/load-rendezvous.ts"
   },
   "devDependencies": {
+    "@types/ws": "^8.18.1",
     "@types/node": "^22.15.0",
     "prettier": "^3.8.1",
     "tsx": "^4.23.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.17",
+    "ws": "^8.18.3"
   },
   "main": "index.js",
   "directories": {

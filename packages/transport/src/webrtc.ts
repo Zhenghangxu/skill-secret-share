@@ -136,11 +136,17 @@ export class PeerSession {
     };
   }
 
-  get connectionType(): 'direct' | 'relayed' {
+  get candidatePair(): { localType: string; remoteType: string } {
     const pair = this.peer.getSelectedCandidatePair();
-    return pair?.local.type.toLowerCase() === 'relay' || pair?.remote.type.toLowerCase() === 'relay'
-      ? 'relayed'
-      : 'direct';
+    return {
+      localType: pair?.local.type.toLowerCase() ?? 'unknown',
+      remoteType: pair?.remote.type.toLowerCase() ?? 'unknown',
+    };
+  }
+
+  get connectionType(): 'direct' | 'relayed' {
+    const pair = this.candidatePair;
+    return pair.localType === 'relay' || pair.remoteType === 'relay' ? 'relayed' : 'direct';
   }
 
   sendControl(message: ControlMessage): void {
@@ -219,6 +225,7 @@ export async function connectWebRtc(input: {
   role: 'sender' | 'receiver';
   rendezvous: RendezvousClient;
   iceServers: IceServerConfig[];
+  iceTransportPolicy?: 'all' | 'relay';
 }): Promise<PeerSession> {
   if (!loggerInitialized) {
     nodeDataChannel.initLogger('Warning', () => undefined);
@@ -226,6 +233,7 @@ export async function connectWebRtc(input: {
   }
   const peer = new nodeDataChannel.PeerConnection(`skillspore-${input.role}`, {
     iceServers: iceServerUrls(input.iceServers),
+    iceTransportPolicy: input.iceTransportPolicy ?? 'all',
     enableIceTcp: true,
     maxMessageSize: 128 * 1024,
   });

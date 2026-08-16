@@ -8,25 +8,31 @@ export interface OpenRendezvousSession {
 }
 
 export async function createRendezvousSession(serverUrl: string): Promise<OpenRendezvousSession> {
-  const rendezvous = await RendezvousClient.connect(serverUrl);
-  return { rendezvous, info: await rendezvous.create() };
+  const { client: rendezvous, info } = await RendezvousClient.connect(serverUrl, {
+    role: 'sender',
+  });
+  return { rendezvous, info };
 }
 
 export async function joinRendezvousSession(
   serverUrl: string,
   nameplate: string
 ): Promise<OpenRendezvousSession> {
-  const rendezvous = await RendezvousClient.connect(serverUrl);
-  return { rendezvous, info: await rendezvous.join(nameplate) };
+  const { client: rendezvous, info } = await RendezvousClient.connect(serverUrl, {
+    role: 'receiver',
+    nameplate,
+  });
+  return { rendezvous, info };
 }
 
 export async function connectSecurePeer(input: {
   openSession: OpenRendezvousSession;
   secret: string;
   role: 'sender' | 'receiver';
+  iceTransportPolicy?: 'all' | 'relay';
 }): Promise<{ session: PeerSession; keys: SessionKeys }> {
   const { rendezvous, info } = input.openSession;
-  await rendezvous.waitUntilPaired(info.expiresAt);
+  const iceServers = await rendezvous.waitUntilPaired(info.expiresAt);
   const sid = Buffer.from(info.sid, 'base64url');
   const state = await beginPake({ secret: input.secret, sid, role: input.role });
   rendezvous.sendRelay({
@@ -42,7 +48,8 @@ export async function connectSecurePeer(input: {
   const session = await connectWebRtc({
     role: input.role,
     rendezvous,
-    iceServers: info.iceServers,
+    iceServers,
+    iceTransportPolicy: input.iceTransportPolicy ?? 'all',
   });
   try {
     await authenticatePeer({

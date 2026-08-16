@@ -2,12 +2,24 @@
 
 ## Rendezvous
 
-The sender opens `wss://<service>/v1/rendezvous` and sends `create`. The service allocates a random
-four-digit nameplate and 32-byte session identifier. The receiver submits only that nameplate; the
+The sender opens `wss://<service>/v1/rendezvous` with the WebSocket subprotocol
+`skillspore.v1.sender`. The service allocates a random four-digit nameplate and 32-byte session
+identifier. The receiver opens the same endpoint with `skillspore.v1.receiver.<nameplate>`. The
 remaining passcode words never leave the peers except as inputs to CPace.
+
+Creation and joining happen during the HTTP upgrade; there are no WebSocket `create` or `join`
+messages. Invalid, missing, or multiple SkillSpore subprotocols are rejected before a WebSocket is
+accepted. Successful upgrades echo the selected subprotocol.
+
+The sender receives `created` and the receiver receives `joined`, each containing the nameplate,
+session identifier, and expiration. Once both sockets are present, each peer receives a `paired`
+message with its own ICE server configuration. TURN credentials are never issued to an unpaired
+session.
 
 The service forwards JSON signaling messages but does not persist them. Sessions accept one sender
 and one receiver and expire after ten minutes while waiting or fifteen minutes after pairing.
+Client messages are limited to `relay`, `attempt-failed`, and `complete`; binary messages and JSON
+messages over 64 KiB are rejected. The rendezvous layer never receives skill payload bytes.
 
 ## Peer authentication
 

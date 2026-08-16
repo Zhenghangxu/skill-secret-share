@@ -25,7 +25,7 @@ import {
   connectSecurePeer,
   joinRendezvousSession,
 } from '../../../../packages/transport/src/index.js';
-import { getOption, hasOption, serverUrl } from '../options.js';
+import { getOption, hasOption, iceTransportPolicy, serverUrl } from '../options.js';
 import { assertNotCancelled, printDiff, printManifest } from '../ui.js';
 
 async function exists(path: string): Promise<boolean> {
@@ -123,7 +123,12 @@ export async function runFetch(args: string[]): Promise<void> {
   let quarantine: QuarantineWriter | undefined;
   try {
     spinner.start('Authenticating sender');
-    peer = await connectSecurePeer({ openSession, secret, role: 'receiver' });
+    peer = await connectSecurePeer({
+      openSession,
+      secret,
+      role: 'receiver',
+      iceTransportPolicy: iceTransportPolicy(args),
+    });
     spinner.stop(`Sender authenticated (${peer.session.connectionType})`);
     const first = await peer.session.receiveControl(60_000);
     if (first.type !== 'manifest') throw new Error('Sender did not provide a package manifest');

@@ -13,6 +13,10 @@ export function serverUrl(args: string[]): string {
   return getOption(args, '--server') ?? process.env.SKILLSPORE_SERVER_URL ?? DEFAULT_SERVER_URL;
 }
 
+export function iceTransportPolicy(args: string[]): 'all' | 'relay' {
+  return hasOption(args, '--force-relay') ? 'relay' : 'all';
+}
+
 export function positionalArgs(args: string[], optionsWithValues: string[] = []): string[] {
   const result: string[] = [];
   for (let index = 0; index < args.length; index++) {

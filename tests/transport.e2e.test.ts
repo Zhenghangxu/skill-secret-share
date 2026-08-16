@@ -15,7 +15,6 @@ import {
   connectSecurePeer,
   createRendezvousSession,
   joinRendezvousSession,
-  RendezvousClient,
 } from '../packages/transport/src/index.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -74,11 +73,9 @@ describe('local end-to-end secure transport', () => {
   it('allows exactly one receiver per live session', async () => {
     const sender = await createRendezvousSession(serverUrl);
     const receiver = await joinRendezvousSession(serverUrl, sender.info.nameplate);
-    const intruder = await RendezvousClient.connect(serverUrl);
     try {
-      await expect(intruder.join(sender.info.nameplate)).rejects.toThrow(/occupied/);
+      await expect(joinRendezvousSession(serverUrl, sender.info.nameplate)).rejects.toThrow(/409/);
     } finally {
-      intruder.close();
       receiver.rendezvous.close();
       sender.rendezvous.close();
     }

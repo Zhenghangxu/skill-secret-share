@@ -34,14 +34,15 @@ any target fails.
 ## Commands
 
 ```text
-skillspore share <skill-directory> [--custom-passcode] [--server <wss-url>]
-skillspore fetch [--download-only] [--output <directory>] [--server <wss-url>]
+skillspore share <skill-directory> [--custom-passcode] [--server <wss-url>] [--force-relay]
+skillspore fetch [--download-only] [--output <directory>] [--server <wss-url>] [--force-relay]
 skillspore list [--global] [--agent <agent>] [--json]
 skillspore remove <skills...> [--global] [--agent <agent>]
 skillspore init <name>
 ```
 
 Passcodes are never accepted through command arguments or environment variables.
+`--force-relay` is reserved for TURN deployment testing; normal transfers prefer direct WebRTC.
 
 ## Development
 
@@ -70,12 +71,17 @@ pnpm dev:cli fetch
 For a fully local test between two computers, follow the
 [LAN end-to-end testing guide](docs/lan-e2e-testing.md).
 
-The local service uses STUN only by default. Configure Twilio credentials to exercise TURN:
+The local Node reference service uses Cloudflare STUN only by default. Configure Twilio credentials
+only when testing the rollback credential provider:
 
 ```shell
 TWILIO_ACCOUNT_SID=...
 TWILIO_AUTH_TOKEN=...
 ```
+
+The production target is the Cloudflare Worker and per-session Durable Object described in the
+[deployment guide](docs/deployment.md). Production rollout remains gated by the accepted
+[Cloudflare architecture decision](docs/cloudflare-production-decision.md).
 
 ## Package and infrastructure limits
 
