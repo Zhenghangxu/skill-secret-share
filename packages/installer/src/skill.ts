@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, lstat, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, sep } from 'node:path';
 import { createEngine } from '@secretlint/node';
@@ -62,6 +62,10 @@ export interface PreparedSkill {
   metadata: SkillMetadata;
   manifest: PackageManifest;
   secretFindings: SecretFinding[];
+}
+
+export interface PreparedSkillSnapshot extends PreparedSkill {
+  cleanup(): Promise<void>;
 }
 
 export function validateIncomingManifest(manifest: PackageManifest): void {
@@ -318,6 +322,28 @@ export async function prepareSkill(rootDir: string): Promise<PreparedSkill> {
     manifest: createManifest({ skill: metadata, files: manifestFiles }),
     secretFindings,
   };
+}
+
+export async function prepareSkillSnapshot(rootDir: string): Promise<PreparedSkillSnapshot> {
+  const sourceRoot = resolve(rootDir);
+  const stagingDirectory = await mkdtemp(join(tmpdir(), 'skillspore-share-'));
+  const snapshotRoot = join(stagingDirectory, basename(sourceRoot));
+  try {
+    await cp(sourceRoot, snapshotRoot, {
+      recursive: true,
+      errorOnExist: true,
+      preserveTimestamps: true,
+      verbatimSymlinks: true,
+    });
+    const prepared = await prepareSkill(snapshotRoot);
+    return {
+      ...prepared,
+      cleanup: () => rm(stagingDirectory, { recursive: true, force: true }),
+    };
+  } catch (error) {
+    await rm(stagingDirectory, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 export function resolveManifestPath(rootDir: string, relativePath: string): string {

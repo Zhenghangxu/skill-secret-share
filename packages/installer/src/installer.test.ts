@@ -1,12 +1,16 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createManifest, encodeFileFrame } from '@skillspore/protocol';
+import { createManifest } from '@skillspore/protocol';
 import { AGENTS } from './agents.js';
 import { diffSkillDirectories } from './diff.js';
-import { QuarantineWriter } from './quarantine.js';
-import { prepareSkill, validateIncomingManifest, validateSkill } from './skill.js';
+import {
+  prepareSkill,
+  prepareSkillSnapshot,
+  validateIncomingManifest,
+  validateSkill,
+} from './skill.js';
 import { installSkillTransaction } from './transaction.js';
 import { agents as upstreamAgents } from './upstream/agents.js';
 
@@ -75,6 +79,19 @@ describe('skill validation and preparation', () => {
     await expect(prepareSkill(valid)).rejects.toThrow(/Symlinks are not allowed/);
   });
 
+  it('prepares and cleans up a validated snapshot independent of the live skill', async () => {
+    const parent = await temporaryDirectory();
+    const root = await createSkill(parent, 'snapshot-skill', 'validated bytes\n');
+    const prepared = await prepareSkillSnapshot(root);
+    await writeFile(join(root, 'content.txt'), 'changed after validation\n');
+
+    expect(await readFile(join(prepared.rootDir, 'content.txt'), 'utf8')).toBe('validated bytes\n');
+    expect(prepared.rootDir).not.toBe(root);
+
+    await prepared.cleanup();
+    await expect(stat(prepared.rootDir)).rejects.toThrow();
+  });
+
   it('rejects authenticated manifests with unsafe paths or no SKILL.md', () => {
     const unsafe = createManifest({
       skill: { name: 'example-skill', description: 'Example' },
@@ -101,26 +118,6 @@ describe('skill validation and preparation', () => {
       ],
     });
     expect(() => validateIncomingManifest(missingSkill)).toThrow(/include SKILL.md/);
-  });
-});
-
-describe('quarantine verification', () => {
-  it('receives frames and verifies every file hash', async () => {
-    const parent = await temporaryDirectory();
-    const source = await createSkill(parent);
-    const prepared = await prepareSkill(source);
-    const quarantine = await QuarantineWriter.create(prepared.manifest);
-    try {
-      for (let index = 0; index < prepared.manifest.files.length; index++) {
-        const file = prepared.manifest.files[index]!;
-        const data = await readFile(join(source, ...file.path.split('/')));
-        await quarantine.writeFrame(encodeFileFrame({ fileIndex: index, offset: 0, data }));
-      }
-      await quarantine.verify();
-      expect(await readFile(join(quarantine.rootDir, 'content.txt'), 'utf8')).toBe('hello\n');
-    } finally {
-      await quarantine.cleanup();
-    }
   });
 });
 

@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./dist/index.js",
-    "./rendezvous": "./dist/rendezvous.js"
+    ".": "./dist/index.js"
   },
   "types": "./dist/index.d.ts",
   "scripts": {
@@ -13,7 +12,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@cipherman/pake-js": "^0.1.1",
     "@scure/bip39": "^2.0.1"
   }
 }

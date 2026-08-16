@@ -1,63 +1,57 @@
-# SkillSpore threat model
+# Threat model
 
-## Status
+This document describes the croc-backed SkillSpore design.
 
-This document describes the `0.1.0-beta.1` design. The implementation and its CPace dependency have
-not received an independent audit. The beta must not claim audited or production-grade security.
+## Assets
 
-## Protected assets
+- Confidentiality and integrity of transferred skill contents.
+- The receiver's existing files and agent configuration.
+- Passcode secrecy until the intended receiver connects.
+- Availability of the sender, receiver, and any relay.
 
-- The one-time secret phrase.
-- Skill file contents and metadata beyond what the receiver reviews.
-- Integrity of the selected sender, receiver, WebRTC connection, and installed package.
-- Existing agent skill installations during overwrite and rollback.
+## Trust boundaries
 
-## Trusted components
+SkillSpore trusts the local Node.js runtime, the installed croc binary, croc's cryptographic and
+transfer implementation, and the chosen agent installers. The sender and receiver machines must not
+already be compromised.
 
-- The sender and receiver operating systems and Node.js runtimes.
-- The local SkillSpore CLI installation and npm dependency supply chain.
-- The receiver's confirmation decisions.
+The network and croc relay are untrusted with plaintext. croc uses password-authenticated key
+agreement and end-to-end encryption, including when traffic passes through a relay. A relay can
+observe connection metadata and ciphertext sizes, deny service, delay traffic, or consume resources.
 
-The rendezvous service, signaling path, TURN relay, and network are not trusted with skill contents
-or the secret phrase.
+## Controls
 
-## Security properties
+- SkillSpore requires croc 10.7.0 or newer and invokes it without a shell.
+- Four-word passcodes are generated with cryptographic randomness. Custom passcodes require at least
+  three words or sixteen characters.
+- Passcodes are entered through masked prompts and passed to croc in `CROC_SECRET`, never argv.
+- A fresh `CROC_CONFIG_DIR` prevents remembered or classic-mode croc settings from changing a run.
+- The receiver sees croc's file-count and byte-size prompt before accepting network data.
+- Received files are confined to a random mode-`0700` directory and never executed.
+- After transfer, SkillSpore independently rejects extra top-level entries, symlinks, special files,
+  unsafe paths, excessive depth, excessive file count, files over 10 MiB, and packages over 25 MiB.
+- The receiver sees validated metadata, files, executable markers, secret-scan findings, and diffs
+  before installation.
+- Installation is staged and rolled back if a multi-agent commit fails.
 
-- The rendezvous service receives only a four-digit nameplate, CPace public shares, SDP, ICE
-  candidates, and short-lived TURN credentials. It never receives the secret words.
-- CPace converts the low-entropy phrase into a shared session key without enabling passive offline
-  password guessing. Each active attempt provides at most one online guess and is rate-limited.
-- The CPace-derived confirmation key authenticates the protocol version, roles, session identifier,
-  nameplate, and both DTLS certificate fingerprints. A signaling intermediary cannot silently
-  substitute a different WebRTC connection.
-- WebRTC DTLS encrypts the DataChannel end to end, including when TURN forwards packets.
-- Every file has an authenticated manifest size and SHA-256 digest. The receiver verifies the
-  complete manifest, file contents, and `SKILL.md` metadata before installation.
-- The receiver returns an HMAC-authenticated receipt covering the package hash, byte count, and
-  transfer ID. The sender acknowledges that receipt before the session is closed.
-- Installation stages all targets and restores backups if any commit fails.
+## Residual risks
 
-## Known limitations
+- Security inherits bugs or compromises in croc, its release distribution, and the selected relay.
+- Anyone who learns the passcode before the intended receiver can race to receive or disrupt the
+  transfer. Confirm passcodes over an authenticated private channel.
+- Environment variables are safer than argv but remain visible to the same user, administrators, and
+  sufficiently privileged local software while croc is running.
+- croc's acceptance prompt shows a summary, not SkillSpore's full manifest. Package limits and path
+  rules are enforced after receipt, so a peer with the passcode can waste temporary disk space or
+  bandwidth before SkillSpore rejects the payload.
+- Secret scanning is best-effort and can miss credentials or produce false positives.
+- A malicious but authenticated sender can provide a valid, dangerous skill. Human review remains
+  required; SkillSpore does not sandbox a skill when an agent later uses it.
+- Symlink installation mode intentionally creates links in agent directories. It does not permit
+  symlinks inside transferred skills.
 
-- A malicious rendezvous service can deny service, delay messages, expose peer IP addresses through
-  signaling, or consume TURN quota. It should not be able to read or replace an authenticated skill.
-- The four-digit nameplate is public and intentionally provides no secrecy.
-- Secret scanning is best-effort and cannot prove that a skill is free of credentials.
-- Skill instructions may still be malicious. SkillSpore shows requested tools and executable files
-  but cannot determine the semantic intent of instructions.
-- Installed skills run with the permissions granted by their agent. SkillSpore never executes them
-  during transfer or installation.
-- JavaScript strings cannot be reliably wiped from memory; the CLI avoids logging or persisting the
-  passcode but cannot guarantee immediate memory erasure.
-- Crash recovery journals protect agent installation paths, but concurrent SkillSpore installation
-  processes are not supported in the beta.
+## Maintenance
 
-## Release requirements
-
-Before a stable `1.0` release:
-
-1. Independently review the CPace integration, transcript binding, and receipt construction.
-2. Fuzz signaling, control messages, manifests, and binary file frames.
-3. Perform dependency and npm provenance review.
-4. Run direct and TURN-relayed interoperability tests across supported operating systems.
-5. Publish the review findings and resolve all high-severity issues.
+Track croc security releases, test the minimum supported version on macOS, Linux, and Windows, and
+raise the version floor when upstream path-safety or cryptographic fixes require it. Revisit the
+subprocess contract before forwarding additional croc flags or adopting stored transfers.

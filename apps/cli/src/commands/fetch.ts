@@ -1,32 +1,27 @@
-import { lstat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { chmod, lstat, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import {
-  createReceiptMac,
-  decodeFileFrame,
-  parsePasscode,
-  type PackageManifest,
-} from '../../../../packages/protocol/src/index.js';
+import { normalizePasscode } from '../../../../packages/protocol/src/index.js';
 import {
   AGENTS,
-  QuarantineWriter,
   detectInstalledAgents,
   diffSkillDirectories,
   getAgentSkillsDir,
   getCanonicalSkillsDir,
   installSkillTransaction,
+  prepareSkill,
   replaceDirectoryTransaction,
+  resolveManifestPath,
   type AgentId,
   type InstallMode,
   type InstallScope,
+  type PreparedSkill,
 } from '../../../../packages/installer/src/index.js';
-import {
-  connectSecurePeer,
-  joinRendezvousSession,
-} from '../../../../packages/transport/src/index.js';
-import { getOption, hasOption, iceTransportPolicy, serverUrl } from '../options.js';
-import { assertNotCancelled, printDiff, printManifest } from '../ui.js';
+import { receiveDirectoryWithCroc } from '../../../../packages/transport/src/index.js';
+import { crocRelay, getOption, hasOption } from '../options.js';
+import { assertNotCancelled, printDiff, printManifest, printSecretFindings } from '../ui.js';
 
 async function exists(path: string): Promise<boolean> {
   return lstat(path).then(
@@ -35,37 +30,22 @@ async function exists(path: string): Promise<boolean> {
   );
 }
 
-async function receivePackage(
-  peer: Awaited<ReturnType<typeof connectSecurePeer>>,
-  manifest: PackageManifest
-): Promise<QuarantineWriter> {
-  const quarantine = await QuarantineWriter.create(manifest);
-  try {
-    peer.session.sendControl({ type: 'accept-transfer' });
-    for (let fileIndex = 0; fileIndex < manifest.files.length; fileIndex++) {
-      const file = manifest.files[fileIndex]!;
-      let received = 0;
-      while (received < file.size) {
-        const encoded = await peer.session.receiveFileFrame(5 * 60 * 1000);
-        const frame = decodeFileFrame(encoded);
-        if (frame.fileIndex !== fileIndex)
-          throw new Error(`Unexpected file frame for ${file.path}`);
-        await quarantine.writeFrame(encoded);
-        received += frame.data.length;
-      }
-      const complete = await peer.session.receiveControl(5 * 60 * 1000);
-      if (complete.type !== 'file-complete' || complete.fileIndex !== fileIndex) {
-        throw new Error(`Missing completion marker for ${file.path}`);
-      }
-    }
-    const complete = await peer.session.receiveControl(5 * 60 * 1000);
-    if (complete.type !== 'transfer-complete') throw new Error('Transfer ended unexpectedly');
-    await quarantine.verify();
-    return quarantine;
-  } catch (error) {
-    await quarantine.cleanup();
-    throw error;
+async function inspectReceivedSkill(receiveRoot: string): Promise<PreparedSkill> {
+  const entries = await readdir(receiveRoot, { withFileTypes: true });
+  if (entries.length !== 1 || !entries[0]!.isDirectory()) {
+    throw new Error('The transfer must contain exactly one skill directory');
   }
+  const prepared = await prepareSkill(join(receiveRoot, entries[0]!.name));
+  await chmod(prepared.rootDir, 0o700).catch(() => undefined);
+  await Promise.all(
+    prepared.manifest.files.map((file) =>
+      chmod(
+        resolveManifestPath(prepared.rootDir, file.path),
+        file.executable ? 0o700 : 0o600
+      ).catch(() => undefined)
+    )
+  );
+  return prepared;
 }
 
 async function chooseAgents(): Promise<AgentId[]> {
@@ -114,65 +94,41 @@ export async function runFetch(args: string[]): Promise<void> {
     await p.password({ message: 'Passcode', mask: '*' }),
     'Fetch cancelled'
   );
-  const { nameplate, secret } = parsePasscode(passcodeInput);
-  const spinner = p.spinner();
-  spinner.start('Joining sender');
-  const openSession = await joinRendezvousSession(serverUrl(args), nameplate);
-  spinner.stop('Connected to sender');
-  let peer: Awaited<ReturnType<typeof connectSecurePeer>> | undefined;
-  let quarantine: QuarantineWriter | undefined;
+  const code = normalizePasscode(passcodeInput);
+  const receiveRoot = await mkdtemp(join(tmpdir(), 'skillspore-receive-'));
   try {
-    spinner.start('Authenticating sender');
-    peer = await connectSecurePeer({
-      openSession,
-      secret,
-      role: 'receiver',
-      iceTransportPolicy: iceTransportPolicy(args),
-    });
-    spinner.stop(`Sender authenticated (${peer.session.connectionType})`);
-    const first = await peer.session.receiveControl(60_000);
-    if (first.type !== 'manifest') throw new Error('Sender did not provide a package manifest');
-    printManifest(first.manifest);
-    const accepted = assertNotCancelled(
-      await p.confirm({ message: 'Receive this skill?', initialValue: true }),
-      'Fetch cancelled'
+    p.note(
+      "Review croc's file count and total size before accepting the transfer.",
+      'Incoming skill'
     );
-    if (!accepted) {
-      peer.session.sendControl({ type: 'reject-transfer', reason: 'Receiver declined' });
-      throw new Error('Fetch cancelled');
+    const relay = crocRelay(args);
+    await receiveDirectoryWithCroc(receiveRoot, code, relay ? { relay } : {});
+
+    const spinner = p.spinner();
+    spinner.start('Validating and scanning received skill');
+    let prepared: PreparedSkill;
+    try {
+      prepared = await inspectReceivedSkill(receiveRoot);
+    } catch (error) {
+      spinner.stop('Received skill was rejected');
+      throw error;
     }
-    spinner.start('Receiving and verifying skill');
-    quarantine = await receivePackage(peer, first.manifest);
-    spinner.stop('Skill transfer verified');
-    const receipt = {
-      packageHash: first.manifest.packageHash,
-      totalBytes: first.manifest.totalBytes,
-      transferId: first.manifest.transferId,
-    };
-    peer.session.sendControl({
-      type: 'receipt',
-      ...receipt,
-      mac: createReceiptMac(peer.keys.receiptKey, receipt),
-    });
-    const acknowledgement = await peer.session.receiveControl(30_000);
-    if (acknowledgement.type !== 'receipt-ack')
-      throw new Error('Sender did not acknowledge the receipt');
-    openSession.rendezvous.markComplete();
-    peer.session.close();
-    peer = undefined;
+    spinner.stop('Received skill is valid');
+    printManifest(prepared.manifest);
+    printSecretFindings(prepared.secretFindings);
 
     if (hasOption(args, '--download-only')) {
-      const output = resolve(getOption(args, '--output') ?? first.manifest.skill.name);
+      const output = resolve(getOption(args, '--output') ?? prepared.metadata.name);
       if (await exists(output)) {
-        printDiff(await diffSkillDirectories(output, quarantine.rootDir));
+        printDiff(await diffSkillDirectories(output, prepared.rootDir));
         const overwrite = assertNotCancelled(
           await p.confirm({ message: `Replace ${output}?`, initialValue: false }),
           'Download cancelled'
         );
         if (!overwrite) throw new Error('Download cancelled');
       }
-      await replaceDirectoryTransaction(quarantine.rootDir, output);
-      p.outro(pc.green(`Downloaded ${first.manifest.skill.name} to ${output}`));
+      await replaceDirectoryTransaction(prepared.rootDir, output);
+      p.outro(pc.green(`Downloaded ${prepared.metadata.name} to ${output}`));
       return;
     }
 
@@ -197,26 +153,24 @@ export async function runFetch(args: string[]): Promise<void> {
       }),
       'Installation cancelled'
     ) as InstallMode;
-    await reviewOverwrite(quarantine.rootDir, first.manifest.skill.name, agents, scope, mode);
+    await reviewOverwrite(prepared.rootDir, prepared.metadata.name, agents, scope, mode);
     const confirmed = assertNotCancelled(
-      await p.confirm({ message: `Install ${first.manifest.skill.name}?`, initialValue: true }),
+      await p.confirm({ message: `Install ${prepared.metadata.name}?`, initialValue: true }),
       'Installation cancelled'
     );
     if (!confirmed) throw new Error('Installation cancelled');
     spinner.start('Installing skill atomically');
     const result = await installSkillTransaction({
-      sourceDir: quarantine.rootDir,
-      skillName: first.manifest.skill.name,
+      sourceDir: prepared.rootDir,
+      skillName: prepared.metadata.name,
       agents,
       scope,
       mode,
     });
     spinner.stop('Installation complete');
     p.note(result.paths.join('\n'), 'Installed paths');
-    p.outro(pc.green(`Installed ${first.manifest.skill.name} successfully.`));
+    p.outro(pc.green(`Installed ${prepared.metadata.name} successfully.`));
   } finally {
-    peer?.session.close();
-    openSession.rendezvous.close();
-    await quarantine?.cleanup();
+    await rm(receiveRoot, { recursive: true, force: true });
   }
 }

@@ -1,30 +1,15 @@
 import { randomInt } from 'node:crypto';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
 
-const NAMEPLATE_PATTERN = /^\d{4}$/;
-
-export function generateSecretPhrase(wordCount = 3): string {
-  if (!Number.isInteger(wordCount) || wordCount < 3) {
-    throw new Error('Secret phrases must contain at least three words');
+export function generateSecretPhrase(wordCount = 4): string {
+  if (!Number.isInteger(wordCount) || wordCount < 4) {
+    throw new Error('Passcodes must contain at least four words');
   }
   return Array.from({ length: wordCount }, () => wordlist[randomInt(wordlist.length)]!).join('-');
 }
 
-export function formatPasscode(nameplate: string, secret: string): string {
-  if (!NAMEPLATE_PATTERN.test(nameplate)) throw new Error('Nameplate must contain four digits');
-  const normalized = normalizeSecret(secret);
-  return `${nameplate}-${normalized}`;
-}
-
-export function parsePasscode(passcode: string): { nameplate: string; secret: string } {
-  const normalized = passcode.trim().toLowerCase();
-  const separator = normalized.indexOf('-');
-  if (separator < 0) throw new Error('Passcode must start with a four-digit nameplate');
-  const nameplate = normalized.slice(0, separator);
-  const secret = normalized.slice(separator + 1);
-  if (!NAMEPLATE_PATTERN.test(nameplate))
-    throw new Error('Passcode nameplate must contain four digits');
-  return { nameplate, secret: normalizeSecret(secret) };
+export function normalizePasscode(passcode: string): string {
+  return normalizeSecret(passcode);
 }
 
 export function validateCustomSecret(secret: string): string {
