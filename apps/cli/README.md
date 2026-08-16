@@ -1,7 +1,8 @@
 # SkillSpore CLI
 
-Experimental peer-to-peer Agent Skill transfer and transactional installation for Codex, Claude
-Code, and Cursor.
+Experimental end-to-end encrypted Agent Skill transfer and transactional installation for Codex,
+Claude Code, and Cursor. croc owns the encrypted network transfer; SkillSpore validates, reviews,
+and installs the received skill.
 
 Requires [croc](https://github.com/schollz/croc) 10.7.0 or newer on `PATH`.
 

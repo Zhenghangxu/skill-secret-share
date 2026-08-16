@@ -8,10 +8,15 @@ export const MINIMUM_CROC_VERSION = '10.7.0';
 export interface CrocTransferOptions {
   relay?: string;
   executable?: string;
+  executableArgs?: string[];
 }
 
 function executable(options: CrocTransferOptions): string {
   return options.executable ?? (process.env.SKILLSPORE_CROC_PATH?.trim() || 'croc');
+}
+
+function commandArgs(options: CrocTransferOptions, args: string[]): string[] {
+  return [...(options.executableArgs ?? []), ...args];
 }
 
 function validateText(value: string, label: string): string {
@@ -82,7 +87,7 @@ async function captureProcess(command: string, args: string[]): Promise<string> 
 }
 
 export async function assertCrocAvailable(options: CrocTransferOptions = {}): Promise<void> {
-  const output = await captureProcess(executable(options), ['--version']);
+  const output = await captureProcess(executable(options), commandArgs(options, ['--version']));
   const actual = parseVersion(output);
   const minimum = parseVersion(MINIMUM_CROC_VERSION)!;
   if (!actual)
@@ -113,7 +118,7 @@ async function runTransfer(input: {
     };
     delete env.CROC_STORE_TOKEN;
     await new Promise<void>((resolvePromise, reject) => {
-      const child = spawn(executable(input.options), input.args, {
+      const child = spawn(executable(input.options), commandArgs(input.options, input.args), {
         env,
         stdio: input.quiet ? ['inherit', 'ignore', 'pipe'] : 'inherit',
       });

@@ -1,25 +1,29 @@
-import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { assertCrocAvailable, receiveDirectoryWithCroc, sendDirectoryWithCroc } from './croc.js';
+import {
+  assertCrocAvailable,
+  receiveDirectoryWithCroc,
+  sendDirectoryWithCroc,
+  type CrocTransferOptions,
+} from './croc.js';
 
 const temporaryDirectories: string[] = [];
 
 async function fakeCroc(version = '10.7.0'): Promise<{
-  executable: string;
+  options: CrocTransferOptions;
   record: string;
   output: string;
 }> {
   const directory = await mkdtemp(join(tmpdir(), 'skillspore-croc-test-'));
   temporaryDirectories.push(directory);
-  const executable = join(directory, 'croc');
+  const script = join(directory, 'croc.cjs');
   const record = join(directory, 'record.json');
   const output = join(directory, 'output');
   await writeFile(
-    executable,
-    `#!/usr/bin/env node
-const fs = require('node:fs');
+    script,
+    `const fs = require('node:fs');
 if (process.argv.includes('--version')) {
   console.log('croc version v${version}-test');
   process.exit(0);
@@ -37,8 +41,11 @@ if (process.env.FAKE_CROC_EXIT) {
 }
 `
   );
-  await chmod(executable, 0o700);
-  return { executable, record, output };
+  return {
+    options: { executable: process.execPath, executableArgs: [script] },
+    record,
+    output,
+  };
 }
 
 afterEach(async () => {
@@ -58,7 +65,7 @@ describe('croc transport adapter', () => {
     process.env.FAKE_CROC_RECORD = fake.record;
     process.env.CROC_STORE_TOKEN = 'unrelated-stored-transfer';
     await sendDirectoryWithCroc(fake.output, 'four-word-secret-code', {
-      executable: fake.executable,
+      ...fake.options,
       relay: 'relay.example.test:9009',
     });
     const record = JSON.parse(await readFile(fake.record, 'utf8')) as {
@@ -88,7 +95,7 @@ describe('croc transport adapter', () => {
     const fake = await fakeCroc();
     process.env.FAKE_CROC_RECORD = fake.record;
     await receiveDirectoryWithCroc(fake.output, 'receiver-secret-code', {
-      executable: fake.executable,
+      ...fake.options,
     });
     const record = JSON.parse(await readFile(fake.record, 'utf8')) as {
       args: string[];
@@ -101,9 +108,7 @@ describe('croc transport adapter', () => {
 
   it('rejects croc versions older than the supported security baseline', async () => {
     const fake = await fakeCroc('10.6.0');
-    await expect(assertCrocAvailable({ executable: fake.executable })).rejects.toThrow(
-      /10\.7\.0 or newer/
-    );
+    await expect(assertCrocAvailable(fake.options)).rejects.toThrow(/found 10\.6\.0/);
   });
 
   it('redacts a passcode from captured sender errors', async () => {
@@ -112,7 +117,7 @@ describe('croc transport adapter', () => {
     process.env.FAKE_CROC_EXIT = '2';
     await expect(
       sendDirectoryWithCroc(fake.output, 'never-print-this-code', {
-        executable: fake.executable,
+        ...fake.options,
       })
     ).rejects.toThrow(/failed with \[redacted\]/);
   });
@@ -123,9 +128,9 @@ describe('croc transport adapter', () => {
   ])('rejects stored-transfer passcodes before starting a live transfer', async (code) => {
     const fake = await fakeCroc();
     process.env.FAKE_CROC_RECORD = fake.record;
-    await expect(
-      receiveDirectoryWithCroc(fake.output, code, { executable: fake.executable })
-    ).rejects.toThrow(/stored-transfer token or URL/);
+    await expect(receiveDirectoryWithCroc(fake.output, code, fake.options)).rejects.toThrow(
+      /stored-transfer token or URL/
+    );
     await expect(readFile(fake.record, 'utf8')).rejects.toThrow();
   });
 });

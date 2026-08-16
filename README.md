@@ -4,7 +4,7 @@ SkillSpore securely transfers one [Agent Skill](https://agentskills.io/specifica
 computer to another and installs it for Codex, Claude Code, or Cursor.
 
 File transfer is delegated to [croc](https://github.com/schollz/croc). SkillSpore keeps the
-skill-specific safety layer: validation, secret scanning, private temporary receipt, review,
+skill-specific safety layer: validation, secret scanning, private temporary storage, review,
 diffing, and transactional installation.
 
 > [!WARNING]
@@ -40,14 +40,15 @@ The receiver enters that passcode through a hidden prompt:
 skillspore fetch
 ```
 
-croc performs password-authenticated key agreement, end-to-end encryption, relay/direct connection
-selection, transfer integrity checks, and resume handling. The passcode is supplied to croc through
-its recommended `CROC_SECRET` environment variable and never appears in process arguments.
+croc performs password-authenticated key agreement, end-to-end encryption, local-network and relay
+connection selection, and transfer integrity checks. The passcode is supplied to croc through its
+recommended `CROC_SECRET` environment variable and never appears in process arguments.
 
 The receiver first sees croc's file-count and byte-size prompt. Accepted files land in a private
-temporary directory. SkillSpore then independently validates and scans the received skill, shows its
-metadata and file list, and installs it only after confirmation. Multi-agent installation is staged
-and rolled back if any target fails.
+temporary directory. SkillSpore then requires exactly one skill directory, independently reapplies
+its package limits and path checks, scans the received files, shows the metadata and file list, and
+installs only after confirmation. Multi-agent installation is staged and rolled back if any target
+fails.
 
 ## Commands
 
@@ -86,7 +87,8 @@ and [deployment guide](docs/deployment.md).
 - One skill directory per transfer.
 - 25 MiB total, 10 MiB per file, and 1,000 files.
 - Symlinks, special files, unsafe paths, and traversal are rejected during SkillSpore validation.
-- Received content remains under a mode-`0700` temporary directory until review and installation.
+- Received content remains under a private temporary directory until review and installation
+  (mode `0700` where POSIX permissions apply).
 - Bundled scripts are never executed automatically.
 
 See the [threat model](THREAT_MODEL.md) and [transport boundary](docs/protocol.md) for details.
