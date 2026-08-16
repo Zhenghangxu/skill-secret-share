@@ -10,13 +10,5 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@skillspore/protocol": "workspace:*",
-    "node-datachannel": "^0.32.3",
-    "ws": "^8.18.3"
-  },
-  "devDependencies": {
-    "@types/ws": "^8.18.1"
   }
 }

@@ -1,16 +1,34 @@
 # SkillSpore
 
-SkillSpore securely transfers one [Agent Skill](https://agentskills.io/specification) directly from
-one computer to another and installs it for Codex, Claude Code, or Cursor.
+SkillSpore securely transfers one [Agent Skill](https://agentskills.io/specification) from one
+computer to another and installs it for Codex, Claude Code, or Cursor.
+
+File transfer is delegated to [croc](https://github.com/schollz/croc). SkillSpore keeps the
+skill-specific safety layer: validation, secret scanning, private temporary storage, review,
+diffing, and transactional installation.
 
 > [!WARNING]
-> SkillSpore is an experimental public beta. Its PAKE-based session design has automated test-vector
-> coverage but has not received an independent security audit. Do not use it for highly sensitive
-> material yet.
+> SkillSpore is experimental beta software. It relies on croc's security and public relay by
+> default. Do not use it for highly sensitive material without reviewing both projects and choosing
+> a relay appropriate for your threat model.
+
+## Requirements
+
+- Node.js 22.20 or newer
+- pnpm 10.17.1 for development
+- croc 10.7.0 or newer on both computers
+
+Install croc using the instructions in the [croc README](https://github.com/schollz/croc#install).
+For example, on macOS:
+
+```shell
+brew install croc
+```
 
 ## How it works
 
-The sender validates and scans a skill, then receives a one-time passcode:
+The sender validates the skill, scans it for likely secrets, and starts croc with a one-time
+four-word passcode:
 
 ```shell
 skillspore share ~/skills/example-skill
@@ -22,31 +40,30 @@ The receiver enters that passcode through a hidden prompt:
 skillspore fetch
 ```
 
-The peers authenticate the passcode with CPace, bind it to their WebRTC DTLS certificate
-fingerprints, and transfer the skill over a reliable DataChannel. WebRTC connects directly when
-possible and uses a managed TURN relay when necessary. The rendezvous service never receives the
-secret phrase, skill contents, or decryption key.
+croc performs password-authenticated key agreement, end-to-end encryption, local-network and relay
+connection selection, and transfer integrity checks. The passcode is supplied to croc through its
+recommended `CROC_SECRET` environment variable and never appears in process arguments.
 
-Before installation, the receiver sees the metadata, file list, executable files, requested tools,
-and any changes to an existing installation. Multi-agent installation is staged and rolled back if
-any target fails.
+The receiver first sees croc's file-count and byte-size prompt. Accepted files land in a private
+temporary directory. SkillSpore then requires exactly one skill directory, independently reapplies
+its package limits and path checks, scans the received files, shows the metadata and file list, and
+installs only after confirmation. Multi-agent installation is staged and rolled back if any target
+fails.
 
 ## Commands
 
 ```text
-skillspore share <skill-directory> [--custom-passcode] [--server <wss-url>] [--force-relay]
-skillspore fetch [--download-only] [--output <directory>] [--server <wss-url>] [--force-relay]
+skillspore share <skill-directory> [--custom-passcode] [--relay <host:port>]
+skillspore fetch [--download-only] [--output <directory>] [--relay <host:port>]
 skillspore list [--global] [--agent <agent>] [--json]
 skillspore remove <skills...> [--global] [--agent <agent>]
 skillspore init <name>
 ```
 
-Passcodes are never accepted through command arguments or environment variables.
-`--force-relay` is reserved for TURN deployment testing; normal transfers prefer direct WebRTC.
+Set `SKILLSPORE_CROC_RELAY` instead of repeating `--relay`. Set `SKILLSPORE_CROC_PATH` if the croc
+binary is not on `PATH`.
 
 ## Development
-
-Requirements: Node 22.20 or newer and pnpm 10.17.1.
 
 ```shell
 pnpm install
@@ -55,59 +72,28 @@ pnpm test
 pnpm build
 ```
 
-Start the local rendezvous service:
-
-```shell
-pnpm dev:server
-```
-
-In two other terminals:
+Run the CLI from the workspace:
 
 ```shell
 pnpm dev:cli share /path/to/example-skill
 pnpm dev:cli fetch
 ```
 
-For a fully local test between two computers, follow the
-[LAN end-to-end testing guide](docs/lan-e2e-testing.md).
+For two-computer testing or a private relay, see the [end-to-end testing guide](docs/lan-e2e-testing.md)
+and [deployment guide](docs/deployment.md).
 
-The local Node reference service uses Cloudflare STUN only by default. Configure Twilio credentials
-only when testing the rollback credential provider:
+## Skill limits and safeguards
 
-```shell
-TWILIO_ACCOUNT_SID=...
-TWILIO_AUTH_TOKEN=...
-```
-
-The production target is the Cloudflare Worker and per-session Durable Object described in the
-[deployment guide](docs/deployment.md). Production rollout remains gated by the accepted
-[Cloudflare architecture decision](docs/cloudflare-production-decision.md).
-
-## Package and infrastructure limits
-
-- One sender and one receiver per session.
-- 10-minute waiting TTL and 15-minute connected TTL.
+- One skill directory per transfer.
 - 25 MiB total, 10 MiB per file, and 1,000 files.
-- Symlinks, special files, unsafe paths, and traversal are rejected.
-- Received files are quarantined and hash-verified before installation.
+- Symlinks, special files, unsafe paths, and traversal are rejected during SkillSpore validation.
+- Received content remains under a private temporary directory until review and installation
+  (mode `0700` where POSIX permissions apply).
 - Bundled scripts are never executed automatically.
 
-See [the threat model](THREAT_MODEL.md), [protocol description](docs/protocol.md), and
-[deployment guide](docs/deployment.md) for details.
-
-## Upstream agent configuration
-
-Agent paths are imported unchanged from a pinned commit of
-[`vercel-labs/skills`](https://github.com/vercel-labs/skills). Run:
-
-```shell
-pnpm upstream:check
-pnpm upstream:sync -- --ref <commit-or-tag>
-```
-
-The weekly workflow reports upstream drift. Updates remain pinned until their diffs and regression
-tests are reviewed.
+See the [threat model](THREAT_MODEL.md) and [transport boundary](docs/protocol.md) for details.
 
 ## License
 
-SkillSpore is MIT licensed. Upstream notices are retained under `third_party/`.
+SkillSpore is MIT licensed. croc is a separate MIT-licensed project and is not bundled with this
+repository.

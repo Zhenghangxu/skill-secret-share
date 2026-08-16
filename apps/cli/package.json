@@ -16,20 +16,17 @@
     "node": ">=22.20.0"
   },
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.js --external:@clack/prompts --external:@cipherman/pake-js --external:@scure/bip39 --external:@secretlint/node --external:@secretlint/secretlint-rule-preset-recommend --external:diff --external:node-datachannel --external:picocolors --external:ws --external:xdg-basedir --external:yaml",
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.js --external:@clack/prompts --external:@scure/bip39 --external:@secretlint/node --external:@secretlint/secretlint-rule-preset-recommend --external:diff --external:picocolors --external:xdg-basedir --external:yaml",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",
-    "@cipherman/pake-js": "^0.1.1",
     "@scure/bip39": "^2.0.1",
     "@secretlint/node": "^13.0.4",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.4",
     "diff": "^8.0.2",
-    "node-datachannel": "^0.32.3",
     "picocolors": "^1.1.1",
-    "ws": "^8.18.3",
     "xdg-basedir": "^5.1.0",
     "yaml": "^2.8.3"
   },
